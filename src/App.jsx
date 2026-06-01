@@ -622,14 +622,40 @@ function AdminPOSView({ menus, orders, members, promos, savedBills, onLogout, sh
   
   // FITUR NOTIFIKASI SUARA PESANAN BARU
   const [prevPending, setPrevPending] = useState(pendingCount);
+  const audioRef = React.useRef(null);
+  const [isAlarmRinging, setIsAlarmRinging] = useState(false);
+
   useEffect(() => {
+    if (!audioRef.current) {
+      audioRef.current = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
+      audioRef.current.loop = true; // Set audio agar berulang (looping)
+    }
     if (pendingCount > prevPending) {
-      // Bunyikan bel saat ada pesanan masuk
-      const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
-      audio.play().catch(e => console.log('Autoplay audio diblokir sementara oleh browser', e));
+      setIsAlarmRinging(true);
+      audioRef.current.play().catch(e => console.log('Autoplay audio diblokir sementara oleh browser', e));
+    } else if (pendingCount === 0 && isAlarmRinging) {
+      stopAlarm();
     }
     setPrevPending(pendingCount);
-  }, [pendingCount, prevPending]);
+  }, [pendingCount, prevPending, isAlarmRinging]);
+
+  // Membersihkan audio jika komponen ditutup
+  useEffect(() => {
+    return () => {
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current.currentTime = 0;
+      }
+    }
+  }, []);
+
+  const stopAlarm = () => {
+    setIsAlarmRinging(false);
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.currentTime = 0;
+    }
+  };
 
   const kasirCategories = ['Semua', ...Array.from(new Set(menus.filter(m => m.isActive !== false).map(m => m.category || 'Lainnya')))];
 
@@ -878,6 +904,14 @@ function AdminPOSView({ menus, orders, members, promos, savedBills, onLogout, sh
 
   return (
     <div className="flex h-screen bg-slate-100 font-sans text-slate-800 overflow-hidden w-full">
+      {/* BANNER ALARM (Mati Otomatis jika pesanan dibuka) */}
+      {isAlarmRinging && (
+        <div className="fixed top-6 left-1/2 -translate-x-1/2 bg-red-600 text-white px-6 py-3 rounded-full shadow-[0_10px_25px_rgba(220,38,38,0.5)] z-[999] flex items-center gap-4 animate-bounce">
+          <span className="font-bold">🔔 Ada Pesanan Baru!</span>
+          <button onClick={stopAlarm} className="bg-white text-red-600 px-4 py-1.5 rounded-full text-xs font-black hover:bg-red-50 shadow-sm active:scale-95 transition-all">Matikan Suara</button>
+        </div>
+      )}
+
       {/* SIDEBAR ADMIN POS */}
       <div className={`${isSidebarOpen ? 'w-64' : 'w-20'} shrink-0 bg-white shadow-xl flex flex-col justify-between z-10 transition-all duration-300 ease-in-out`}>
         <div>
@@ -979,7 +1013,7 @@ function AdminPOSView({ menus, orders, members, promos, savedBills, onLogout, sh
           </div>
         )}
 
-        {activeTab === 'pesanan' && <AdminOrderManager orders={orders} members={members} menus={menus} db={db} formatRp={formatRp} showToast={showToast} onPrint={handlePrintReceipt} />}
+        {activeTab === 'pesanan' && <AdminOrderManager orders={orders} members={members} menus={menus} db={db} formatRp={formatRp} showToast={showToast} onPrint={handlePrintReceipt} stopAlarm={stopAlarm} />}
         {activeTab === 'openbill' && <AdminOpenBill savedBills={savedBills} db={db} handleLoadBill={(b) => { setCart(b.items); setActiveTab('kasir'); deleteDoc(getDocRef('savedBills', b.dbId)); }} />}
         {activeTab === 'menu' && <AdminMenuManager menus={menus} db={db} formatRp={formatRp} showToast={showToast} />}
         {activeTab === 'members' && <AdminMemberManager members={members} db={db} showToast={showToast} />}
@@ -1019,7 +1053,7 @@ function AdminPOSView({ menus, orders, members, promos, savedBills, onLogout, sh
   );
 }
 
-function AdminOrderManager({ orders, members, menus, db, formatRp, showToast, onPrint }) {
+function AdminOrderManager({ orders, members, menus, db, formatRp, showToast, onPrint, stopAlarm }) {
   const STATUS_OPTIONS = ['Menunggu Pembayaran', 'Pending', 'Diproses', 'Selesai', 'Dibatalkan'];
   
   const [searchQuery, setSearchQuery] = useState("");
@@ -1035,9 +1069,11 @@ function AdminOrderManager({ orders, members, menus, db, formatRp, showToast, on
 
   const toggleOrderDetails = (orderId) => {
     setExpandedOrders(prev => ({ ...prev, [orderId]: !prev[orderId] }));
+    if(stopAlarm) stopAlarm(); // Matikan alarm saat pesanan dibuka
   };
   
   const handleStatusChange = async (orderId, newStatus) => {
+    if(stopAlarm) stopAlarm(); // Matikan alarm jika status langsung diubah
     const target = orders.find(o => o.dbId === orderId);
     if (!target) return;
     try {
