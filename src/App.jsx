@@ -54,7 +54,7 @@ const generateInvoiceWAUrl = (order, userPhone) => {
   const itemsText = order.items.map(i => `- ${i.quantity || i.qty}x ${i.name} (${i.variant || i.variantId})${i.note ? ` [Note: ${i.note}]` : ''}: ${formatRp(i.price * (i.quantity || i.qty))}`).join('%0A');
   let discountText = '';
   if (order.discount && order.discount.value > 0) discountText = `%0A*Diskon Promo (${order.discount.code}):* -${formatRp(order.discount.value)}`;
-  const text = `*INVOICE KOPI PARKIR*%0A%0AOrder ID: ${order.id}%0ATanggal: ${order.date || order.time}%0ANama: ${order.customer}%0A%0A*Detail Pesanan:*%0A${itemsText}%0A%0A*Subtotal:* ${formatRp(order.originalTotal || order.total + (order.discount?.value || 0))}${discountText}%0A*TOTAL TAGIHAN:* ${formatRp(order.total)}%0A%0A*Poin Didapat:* +${order.earnedPoints || 0} Poin%0A%0ATerima kasih telah ngopi di Kopi Parkir!`;
+  const text = `*INVOICE KOPI PARKIR*%0A*Coffee & Eatery*%0A%0AOrder ID: ${order.id}%0ATanggal: ${order.date || order.time}%0ANama: ${order.customer}%0A%0A*Detail Pesanan:*%0A${itemsText}%0A%0A*Subtotal:* ${formatRp(order.originalTotal || order.total + (order.discount?.value || 0))}${discountText}%0A*TOTAL TAGIHAN:* ${formatRp(order.total)}%0A%0A*Poin Didapat:* +${order.earnedPoints || 0} Poin%0A%0ATerima Kasih%0ASelamat Menikmati%0A%0AWA: 0811-8802-0800%0Afollow IG: @kopiparkir.id`;
   
   let waNumber = userPhone || "";
   waNumber = waNumber.replace(/[^\d+]/g, ''); 
@@ -207,7 +207,7 @@ function GuestView({ onLogin, onRegister }) {
           <img src={logoImageUrl} alt="Kopi Parkir Logo" className="w-full h-full object-cover" />
         </div>
         <h1 className="text-3xl font-black text-[#3c5b41] tracking-tight mt-2">KOPI PARKIR</h1>
-        <p className="text-[#3c5b41]/70 font-medium mt-1 text-sm">Kopi, Roti & Kue Pilihan</p>
+        <p className="text-[#3c5b41]/70 font-medium mt-1 text-sm">Coffee & Eatery</p>
       </div>
       
       <div className="bg-white p-6 rounded-3xl shadow-lg shadow-[#3c5b41]/10 border border-[#f0f4f1] animate-in slide-in-from-bottom-8">
@@ -657,7 +657,8 @@ function AdminPOSView({ menus, orders, members, promos, savedBills, onLogout, sh
 
   useEffect(() => {
     if (!audioRef.current) {
-      audioRef.current = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
+      // Menggunakan URL audio yang lebih stabil agar tidak hilang
+      audioRef.current = new Audio('https://actions.google.com/sounds/v1/doors/store_door_chime.ogg');
       audioRef.current.loop = true; // Set audio agar berulang (looping)
     }
     if (pendingCount > prevPending) {
@@ -853,7 +854,7 @@ function AdminPOSView({ menus, orders, members, promos, savedBills, onLogout, sh
       
       // ---- HEADER ----
       let receiptText = init + center + boldOn + 'KOPI PARKIR\n' + boldOff;
-      receiptText += 'Kopi, Roti & Kue\n\n';
+      receiptText += 'Coffee & Eatery\n\n';
       receiptText += left + `Order: ${order.customer}\n`;
       receiptText += `No. Resi: ${order.id}\n`;
       receiptText += `Waktu: ${formattedDateTime}\n`;
@@ -900,12 +901,11 @@ function AdminPOSView({ menus, orders, members, promos, savedBills, onLogout, sh
       receiptText += dotLineStr;
       
       // ---- FOOTER ----
-      receiptText += center + '**Terima Kasih**\n';
-      receiptText += 'Silakan dinikmati\n';
-      receiptText += 'kopi & sajian kami.\n\n';
+      receiptText += center + 'Terima Kasih\n';
+      receiptText += 'Selamat Menikmati\n\n';
       
-      receiptText += 'WA : 0812-8555-7779\n';
-      receiptText += 'IG : @kopi.parkir\n\n';
+      receiptText += 'WA: 0811-8802-0800\n';
+      receiptText += 'follow IG: @kopiparkir.id\n\n';
 
       // ---- BOTTOM DATETIME & ID ----
       const shortId = '#' + (order.id.split('-')[1] || order.id);
