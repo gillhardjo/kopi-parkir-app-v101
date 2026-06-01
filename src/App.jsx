@@ -44,7 +44,7 @@ const getDocRef = (colName, docId) => {
 // CONSTANTS & UTILS
 // ==========================================
 const ADMIN_CREDENTIALS = { username: 'admin', phone: '1234', securityPin: '1701' }; 
-const ADMIN_WA_NUMBER = "6281285557779"; 
+const ADMIN_WA_NUMBER = "6281188020800"; 
 const qrisImageUrl = "https://github.com/gillhardjo/tabetai-app/blob/main/public/qris.png?raw=true";
 const logoImageUrl = "https://github.com/gillhardjo/kopi-parkir-app-v101/blob/main/assets/logo-kopi-parkir-300.png?raw=true";
 
@@ -77,9 +77,12 @@ export default function KopiParkirApp() {
   const [promos, setPromos] = useState([]);
   const [savedBills, setSavedBills] = useState([]);
   
-  // Navigation & User State
-  const [role, setRole] = useState('guest'); // 'guest' | 'member' | 'admin'
-  const [currentUser, setCurrentUser] = useState(null);
+  // Navigation & User State (PERSISTENCE)
+  const [role, setRole] = useState(() => localStorage.getItem('kp_role') || 'guest');
+  const [currentUser, setCurrentUser] = useState(() => {
+    const savedUser = localStorage.getItem('kp_user');
+    return savedUser ? JSON.parse(savedUser) : null;
+  });
   
   // Toast Notification
   const [toast, setToast] = useState(null);
@@ -119,8 +122,11 @@ export default function KopiParkirApp() {
 
   const handleLogin = (name, phone) => {
     if (name.toLowerCase() === ADMIN_CREDENTIALS.username.toLowerCase() && phone === ADMIN_CREDENTIALS.phone) {
+      const adminUser = { name: 'Admin Kopi Parkir', phone };
       setRole('admin');
-      setCurrentUser({ name: 'Admin Kopi Parkir', phone });
+      setCurrentUser(adminUser);
+      localStorage.setItem('kp_role', 'admin');
+      localStorage.setItem('kp_user', JSON.stringify(adminUser));
       showToast('Berhasil login sebagai Admin', 'success');
       return;
     }
@@ -128,6 +134,8 @@ export default function KopiParkirApp() {
     if (existingMember) {
       setRole('member');
       setCurrentUser(existingMember);
+      localStorage.setItem('kp_role', 'member');
+      localStorage.setItem('kp_user', JSON.stringify(existingMember));
       showToast(`Selamat datang kembali, ${existingMember.name}!`, 'success');
       return;
     }
@@ -140,8 +148,11 @@ export default function KopiParkirApp() {
     try {
       const newMemberData = { name, phone, points: 0, joinedAt: Date.now() };
       const res = await addDoc(getColRef('members'), newMemberData);
+      const userData = { ...newMemberData, dbId: res.id };
       setRole('member');
-      setCurrentUser({ ...newMemberData, dbId: res.id });
+      setCurrentUser(userData);
+      localStorage.setItem('kp_role', 'member');
+      localStorage.setItem('kp_user', JSON.stringify(userData));
       showToast('Registrasi berhasil!', 'success');
     } catch (e) {
       showToast("Gagal menyambung ke database.", 'error');
@@ -151,6 +162,8 @@ export default function KopiParkirApp() {
   const handleLogout = () => {
     setRole('guest');
     setCurrentUser(null);
+    localStorage.removeItem('kp_role');
+    localStorage.removeItem('kp_user');
   };
 
   const activeUser = currentUser ? members.find(m => m.phone === currentUser.phone && m.name.toLowerCase() === currentUser.name.toLowerCase()) || currentUser : null;
@@ -235,9 +248,17 @@ function GuestView({ onLogin, onRegister }) {
 // ==========================================
 function MemberAppView({ user, menus, orders, promos, onLogout, showToast }) {
   const [view, setView] = useState('home'); 
-  const [cart, setCart] = useState([]);
+  const [cart, setCart] = useState(() => {
+    const savedCart = localStorage.getItem('kp_cart');
+    return savedCart ? JSON.parse(savedCart) : [];
+  });
   const [selectedItem, setSelectedItem] = useState(null);
   const [selectedCategory, setSelectedCategory] = useState('Semua');
+
+  // Simpan keranjang ke local storage setiap kali ada perubahan
+  useEffect(() => {
+    localStorage.setItem('kp_cart', JSON.stringify(cart));
+  }, [cart]);
 
   const getCartTotal = () => cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
   const getCartCount = () => cart.reduce((sum, item) => sum + item.quantity, 0);
@@ -296,6 +317,7 @@ function MemberAppView({ user, menus, orders, promos, onLogout, showToast }) {
     try {
       await setDoc(getDocRef('transactions', orderId), newOrderData);
       setCart([]);
+      localStorage.removeItem('kp_cart'); // Bersihkan keranjang di local storage saat checkout berhasil
       setView('payment');
       showToast("Pesanan berhasil dibuat!", "success");
     } catch (e) {
@@ -603,7 +625,15 @@ function AdminPOSView({ menus, orders, members, promos, savedBills, onLogout, sh
   const [isSidebarOpen, setIsSidebarOpen] = useState(true); // State untuk toggle sidebar
   
   // Kasir Local State
-  const [cart, setCart] = useState([]);
+  const [cart, setCart] = useState(() => {
+    const savedAdminCart = localStorage.getItem('kp_admin_cart');
+    return savedAdminCart ? JSON.parse(savedAdminCart) : [];
+  });
+
+  useEffect(() => {
+    localStorage.setItem('kp_admin_cart', JSON.stringify(cart));
+  }, [cart]);
+
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState('Semua'); // State filter kasir
   const [promoCode, setPromoCode] = useState("");
@@ -736,7 +766,7 @@ function AdminPOSView({ menus, orders, members, promos, savedBills, onLogout, sh
         }
       }
 
-      setCart([]); setPromoCode(""); setDiscount(0); setAppliedPromo(null); setPaymentMethod(''); setCashAmount(''); setCheckoutModal(false);
+      setCart([]); localStorage.removeItem('kp_admin_cart'); setPromoCode(""); setDiscount(0); setAppliedPromo(null); setPaymentMethod(''); setCashAmount(''); setCheckoutModal(false);
       showToast("Pembayaran Berhasil! Struk siap dicetak.", "success");
     } catch (e) { showToast("Gagal memproses pembayaran", "error"); }
   };
@@ -746,7 +776,7 @@ function AdminPOSView({ menus, orders, members, promos, savedBills, onLogout, sh
     try {
       const timeStr = new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }).replace('.', ':');
       await setDoc(getDocRef('savedBills', `BILL-${Date.now()}`), { name: billName, items: [...cart], timeString: timeStr, timestamp: Date.now() });
-      setCart([]); setShowSaveBillModal(false); setBillName(""); showToast(`Bill '${billName}' disimpan`, "success");
+      setCart([]); localStorage.removeItem('kp_admin_cart'); setShowSaveBillModal(false); setBillName(""); showToast(`Bill '${billName}' disimpan`, "success");
     } catch (e) { showToast("Gagal menyimpan bill", "error"); }
   };
 
