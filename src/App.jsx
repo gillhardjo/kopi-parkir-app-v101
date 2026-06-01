@@ -657,8 +657,8 @@ function AdminPOSView({ menus, orders, members, promos, savedBills, onLogout, sh
 
   useEffect(() => {
     if (!audioRef.current) {
-      // Menggunakan URL audio yang lebih stabil agar tidak hilang
-      audioRef.current = new Audio('https://actions.google.com/sounds/v1/doors/store_door_chime.ogg');
+      // Menggunakan URL audio kustom Kopi Parkir dari GitHub
+      audioRef.current = new Audio('https://github.com/gillhardjo/kopi-parkir-app-v101/blob/main/assets/kopi-parkir-notif-sound-01.ogg?raw=true');
       audioRef.current.loop = true; // Set audio agar berulang (looping)
     }
     if (pendingCount > prevPending) {
