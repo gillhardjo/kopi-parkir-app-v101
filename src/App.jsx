@@ -650,40 +650,43 @@ function AdminPOSView({ menus, orders, members, promos, savedBills, onLogout, sh
 
   const pendingCount = orders.filter(o => o.status === 'Menunggu Pembayaran' || o.status === 'Pending').length;
   
-  // FITUR NOTIFIKASI SUARA PESANAN BARU
+  // FITUR NOTIFIKASI SUARA PESANAN BARU (DIPERBARUI)
   const [prevPending, setPrevPending] = useState(pendingCount);
   const audioRef = useRef(null);
   const [isAlarmRinging, setIsAlarmRinging] = useState(false);
+  const [audioBlocked, setAudioBlocked] = useState(false); // State untuk mendeteksi blokir browser
 
   useEffect(() => {
-    if (!audioRef.current) {
-      audioRef.current = new Audio('https://github.com/gillhardjo/kopi-parkir-app-v101/blob/main/assets/kopi-parkir-notif-sound-01.ogg?raw=true');
-      audioRef.current.loop = true; // Set audio agar berulang (looping)
-    }
     if (pendingCount > prevPending) {
       setIsAlarmRinging(true);
-      audioRef.current.play().catch(e => console.log('Autoplay audio diblokir sementara oleh browser', e));
+      if (audioRef.current) {
+        // Coba putar suara, tangkap error jika browser memblokir (Autoplay Policy)
+        audioRef.current.play().then(() => {
+          setAudioBlocked(false);
+        }).catch(e => {
+          console.log('Browser memblokir pemutaran otomatis (Autoplay Policy).', e);
+          setAudioBlocked(true); // Memunculkan tombol putar manual
+        });
+      }
     } else if (pendingCount === 0 && isAlarmRinging) {
       stopAlarm();
     }
     setPrevPending(pendingCount);
   }, [pendingCount, prevPending, isAlarmRinging]);
 
-  // Membersihkan audio jika komponen ditutup
-  useEffect(() => {
-    return () => {
-      if (audioRef.current) {
-        audioRef.current.pause();
-        audioRef.current.currentTime = 0;
-      }
-    }
-  }, []);
-
   const stopAlarm = () => {
     setIsAlarmRinging(false);
+    setAudioBlocked(false);
     if (audioRef.current) {
       audioRef.current.pause();
       audioRef.current.currentTime = 0;
+    }
+  };
+
+  const forcePlayAlarm = () => {
+    if (audioRef.current) {
+      audioRef.current.play();
+      setAudioBlocked(false);
     }
   };
 
@@ -933,11 +936,23 @@ function AdminPOSView({ menus, orders, members, promos, savedBills, onLogout, sh
 
   return (
     <div className="flex h-screen bg-slate-100 font-sans text-slate-800 overflow-hidden w-full">
-      {/* BANNER ALARM (Mati Otomatis jika pesanan dibuka) */}
+      {/* Audio Element Tersembunyi (Menggunakan Link Raw Github yang benar) */}
+      <audio 
+        ref={audioRef} 
+        src="https://raw.githubusercontent.com/gillhardjo/kopi-parkir-app-v101/main/assets/kopi-parkir-notif-sound-01.ogg" 
+        loop 
+        preload="auto"
+      />
+
+      {/* BANNER ALARM */}
       {isAlarmRinging && (
         <div className="fixed top-6 left-1/2 -translate-x-1/2 bg-red-600 text-white px-6 py-3 rounded-full shadow-[0_10px_25px_rgba(220,38,38,0.5)] z-[999] flex items-center gap-4 animate-bounce">
           <span className="font-bold">🔔 Ada Pesanan Baru!</span>
-          <button onClick={stopAlarm} className="bg-white text-red-600 px-4 py-1.5 rounded-full text-xs font-black hover:bg-red-50 shadow-sm active:scale-95 transition-all">Matikan Suara</button>
+          {audioBlocked ? (
+            <button onClick={forcePlayAlarm} className="bg-yellow-400 text-slate-900 px-4 py-1.5 rounded-full text-xs font-black hover:bg-yellow-300 shadow-sm active:scale-95 transition-all">Nyalakan Suara</button>
+          ) : (
+            <button onClick={stopAlarm} className="bg-white text-red-600 px-4 py-1.5 rounded-full text-xs font-black hover:bg-red-50 shadow-sm active:scale-95 transition-all">Matikan Suara</button>
+          )}
         </div>
       )}
 
