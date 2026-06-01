@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { 
   ShoppingCart, MessageCircle, ChevronLeft, Plus, Minus, X, Download, Clock, Store, 
   User, Phone, Users, ScrollText, Edit2, Save, Trash2, LogOut, Eye, EyeOff, Tag, Search, Filter, CheckCircle, Coffee, FolderOpen, Database, Banknote, QrCode, Image as ImageIcon, UtensilsCrossed, Printer, Menu
@@ -652,12 +652,11 @@ function AdminPOSView({ menus, orders, members, promos, savedBills, onLogout, sh
   
   // FITUR NOTIFIKASI SUARA PESANAN BARU
   const [prevPending, setPrevPending] = useState(pendingCount);
-  const audioRef = React.useRef(null);
+  const audioRef = useRef(null);
   const [isAlarmRinging, setIsAlarmRinging] = useState(false);
 
   useEffect(() => {
     if (!audioRef.current) {
-      // Menggunakan URL audio kustom Kopi Parkir dari GitHub
       audioRef.current = new Audio('https://github.com/gillhardjo/kopi-parkir-app-v101/blob/main/assets/kopi-parkir-notif-sound-01.ogg?raw=true');
       audioRef.current.loop = true; // Set audio agar berulang (looping)
     }
