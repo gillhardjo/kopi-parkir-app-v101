@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { 
   ShoppingCart, MessageCircle, ChevronLeft, Plus, Minus, X, Download, Clock, Store, 
-  User, Phone, Users, ScrollText, Edit2, Save, Trash2, LogOut, Eye, EyeOff, Tag, Search, Filter, CheckCircle, Coffee, FolderOpen, Database, Banknote, QrCode, Image as ImageIcon, UtensilsCrossed, Printer, MapPin
+  User, Phone, Users, ScrollText, Edit2, Save, Trash2, LogOut, Eye, EyeOff, Tag, Search, Filter, CheckCircle, Coffee, FolderOpen, Database, Banknote, QrCode, Image as ImageIcon, UtensilsCrossed, Printer, MapPin, Menu
 } from 'lucide-react';
 
 // --- FIREBASE IMPORTS ---
@@ -46,8 +46,8 @@ const getDocRef = (colName, docId) => {
 const ADMIN_CREDENTIALS = { username: 'admin', phone: '1234' };
 const ADMIN_WA_NUMBER = "6281285557779"; 
 const qrisImageUrl = "https://github.com/gillhardjo/tabetai-app/blob/main/public/qris.png?raw=true";
-// Logo placeholder Kopi Parkir
-const logoImageUrl = "https://placehold.co/400x400/3c5b41/ffffff?text=KP";
+// Logo Kopi Parkir
+const logoImageUrl = "https://github.com/gillhardjo/kopi-parkir-app-v101/blob/main/assets/logo-kopi-parkir-300.png?raw=true";
 
 const formatRp = (angka) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(angka || 0);
 
@@ -238,6 +238,7 @@ function MemberAppView({ user, menus, orders, promos, onLogout, showToast }) {
   const [view, setView] = useState('home'); 
   const [cart, setCart] = useState([]);
   const [selectedItem, setSelectedItem] = useState(null);
+  const [selectedCategory, setSelectedCategory] = useState('Semua'); // State untuk filter kategori
 
   const getCartTotal = () => cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
   const getCartCount = () => cart.reduce((sum, item) => sum + item.quantity, 0);
@@ -304,6 +305,11 @@ function MemberAppView({ user, menus, orders, promos, onLogout, showToast }) {
   };
 
   const activeMenus = menus.filter(m => m.isActive !== false).sort((a,b) => (a.orderPriority || 99) - (b.orderPriority || 99));
+  
+  // Ekstrak list kategori dari menu aktif dan filter menu
+  const categories = ['Semua', ...Array.from(new Set(activeMenus.map(m => m.category || 'Lainnya')))];
+  const filteredMenus = activeMenus.filter(m => selectedCategory === 'Semua' || (m.category || 'Lainnya') === selectedCategory);
+  
   const myOrders = orders.filter(o => o.customer === user.name && o.customerPhone === user.phone);
 
   return (
@@ -349,8 +355,18 @@ function MemberAppView({ user, menus, orders, promos, onLogout, showToast }) {
             <button onClick={() => setView('home')} className="p-2 hover:bg-slate-100 rounded-full"><ChevronLeft size={24} className="text-slate-700" /></button>
             <h1 className="flex-1 text-center font-bold text-lg text-slate-800 pr-10">Daftar Menu</h1>
           </div>
+          
+          {/* BARIS FILTER KATEGORI CUSTOMER */}
+          <div className="bg-white px-4 py-2 shadow-sm z-10 border-b border-slate-100 flex gap-2 overflow-x-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+            {categories.map(cat => (
+              <button key={cat} onClick={() => setSelectedCategory(cat)} className={`px-4 py-1.5 rounded-full font-bold text-sm whitespace-nowrap transition-colors ${selectedCategory === cat ? 'bg-[#3c5b41] text-white' : 'bg-[#eef2ef] text-[#3c5b41] hover:bg-[#dce5df]'}`}>
+                {cat}
+              </button>
+            ))}
+          </div>
+
           <div className="flex-1 overflow-y-auto p-4 space-y-4 pb-28">
-            {activeMenus.map(item => (
+            {filteredMenus.map(item => (
               <div key={item.dbId} className="flex gap-4 p-4 border border-slate-100 rounded-2xl shadow-sm bg-white">
                 <div className="w-24 h-24 bg-slate-50 rounded-xl overflow-hidden shrink-0">
                   <img src={item.image} alt={item.name} className="w-full h-full object-cover" />
@@ -584,10 +600,12 @@ function VariantModal({ item, onClose, onAdd, formatRp }) {
 // ==========================================
 function AdminPOSView({ menus, orders, members, promos, savedBills, onLogout, showToast }) {
   const [activeTab, setActiveTab] = useState('kasir'); 
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true); // State untuk toggle sidebar
   
   // Kasir Local State
   const [cart, setCart] = useState([]);
   const [searchQuery, setSearchQuery] = useState("");
+  const [selectedCategory, setSelectedCategory] = useState('Semua'); // State filter kasir
   const [promoCode, setPromoCode] = useState("");
   const [discount, setDiscount] = useState(0);
   const [appliedPromo, setAppliedPromo] = useState(null);
@@ -602,11 +620,14 @@ function AdminPOSView({ menus, orders, members, promos, savedBills, onLogout, sh
   const [billName, setBillName] = useState("");
 
   const pendingCount = orders.filter(o => o.status === 'Menunggu Pembayaran' || o.status === 'Pending').length;
+  
+  const kasirCategories = ['Semua', ...Array.from(new Set(menus.filter(m => m.isActive !== false).map(m => m.category || 'Lainnya')))];
 
   const filteredMenu = menus.filter(item => {
     const matchSearch = item.name.toLowerCase().includes(searchQuery.toLowerCase());
-    return matchSearch && item.isActive !== false;
-  });
+    const matchCategory = selectedCategory === 'Semua' || (item.category || 'Lainnya') === selectedCategory;
+    return matchSearch && matchCategory && item.isActive !== false;
+  }).sort((a,b) => (a.orderPriority || 99) - (b.orderPriority || 99));
 
   const addToCartFinal = (item, variantName, quantity = 1, note = '') => {
     const itemPrice = item.price; 
@@ -850,29 +871,38 @@ function AdminPOSView({ menus, orders, members, promos, savedBills, onLogout, sh
   return (
     <div className="flex h-screen bg-slate-100 font-sans text-slate-800 overflow-hidden w-full">
       {/* SIDEBAR ADMIN POS */}
-      <div className="w-24 md:w-64 bg-white shadow-xl flex flex-col justify-between z-10">
+      <div className={`${isSidebarOpen ? 'w-64' : 'w-20'} shrink-0 bg-white shadow-xl flex flex-col justify-between z-10 transition-all duration-300 ease-in-out`}>
         <div>
-          <div className="p-4 md:p-6 flex items-center justify-center md:justify-start gap-3 border-b border-slate-100">
-            <Coffee className="w-10 h-10 bg-[#3c5b41] text-white rounded-xl p-2" />
-            <h1 className="text-xl font-black text-slate-800 hidden md:block">KopiParkir<span className="text-[#3c5b41]">POS</span></h1>
+          <div className={`p-4 flex items-center ${isSidebarOpen ? 'justify-between' : 'justify-center'} border-b border-slate-100 h-20`}>
+            {isSidebarOpen && (
+              <div className="flex items-center gap-2 overflow-hidden">
+                <img src={logoImageUrl} alt="Kopi Parkir Logo" className="w-8 h-8 rounded-xl object-cover bg-white shadow-sm border border-slate-100 shrink-0" />
+                <h1 className="text-lg font-black text-slate-800">KopiParkir<span className="text-[#3c5b41]">POS</span></h1>
+              </div>
+            )}
+            <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="p-2 bg-slate-50 text-slate-500 rounded-lg hover:bg-slate-100 shrink-0">
+              <Menu size={20}/>
+            </button>
           </div>
-          <nav className="p-4 space-y-2">
+          <nav className="p-3 space-y-2">
             {[{id:'kasir', icon: Coffee, label: 'Kasir'}, {id:'pesanan', icon: Clock, label: 'Pesanan'}, {id:'openbill', icon: FolderOpen, label: 'Open Bill'}, {id:'menu', icon: UtensilsCrossed, label: 'Menu Admin'}, {id:'members', icon: Users, label: 'Member'}, {id:'promos', icon: Tag, label: 'Promo'}].map(tab => (
-              <button key={tab.id} onClick={() => setActiveTab(tab.id)} className={`relative w-full flex items-center gap-3 px-3 py-3 md:px-4 rounded-xl transition-colors ${activeTab === tab.id ? 'bg-[#3c5b41] text-white shadow-md' : 'text-slate-500 hover:bg-[#f0f4f1]'}`}>
-                <tab.icon size={22} className="mx-auto md:mx-0"/>
-                <span className="font-bold hidden md:block">{tab.label}</span>
-                {tab.id === 'openbill' && savedBills.length > 0 && <span className="absolute top-2 right-2 md:static md:ml-auto bg-yellow-400 text-black text-[10px] md:text-xs px-1.5 md:px-2 py-0.5 rounded-full font-bold">{savedBills.length}</span>}
-                {tab.id === 'pesanan' && pendingCount > 0 && <span className="absolute top-2 right-2 md:static md:ml-auto bg-blue-500 text-white text-[10px] md:text-xs px-1.5 md:px-2 py-0.5 rounded-full font-bold shadow-[0_0_10px_rgba(59,130,246,0.5)] animate-pulse">{pendingCount} Baru</span>}
+              <button key={tab.id} onClick={() => setActiveTab(tab.id)} title={tab.label} className={`relative w-full flex items-center ${isSidebarOpen ? 'gap-3 px-4' : 'justify-center px-0'} py-3 rounded-xl transition-colors ${activeTab === tab.id ? 'bg-[#3c5b41] text-white shadow-md' : 'text-slate-500 hover:bg-[#f0f4f1]'}`}>
+                <tab.icon size={22} className="shrink-0"/>
+                {isSidebarOpen && <span className="font-bold whitespace-nowrap">{tab.label}</span>}
+                {tab.id === 'openbill' && savedBills.length > 0 && <span className={`bg-yellow-400 text-black text-[10px] px-1.5 py-0.5 rounded-full font-bold ${!isSidebarOpen ? 'absolute top-1 right-1' : 'ml-auto'}`}>{savedBills.length}</span>}
+                {tab.id === 'pesanan' && pendingCount > 0 && <span className={`bg-blue-500 text-white text-[10px] px-1.5 py-0.5 rounded-full font-bold shadow-[0_0_10px_rgba(59,130,246,0.5)] animate-pulse ${!isSidebarOpen ? 'absolute top-1 right-1' : 'ml-auto'}`}>{!isSidebarOpen ? pendingCount : `${pendingCount} Baru`}</span>}
               </button>
             ))}
           </nav>
         </div>
-        <div className="p-4 border-t border-slate-100 flex items-center gap-3">
-          <button onClick={onLogout} className="p-2 bg-slate-100 text-red-600 rounded-full hover:bg-red-100"><LogOut size={18}/></button>
-          <div className="hidden md:block">
-            <p className="text-xs font-semibold text-green-500">Online</p>
-            <p className="text-sm font-bold text-slate-700">Admin Mode</p>
-          </div>
+        <div className={`p-4 border-t border-slate-100 flex items-center ${isSidebarOpen ? 'gap-3' : 'justify-center'}`}>
+          <button onClick={onLogout} title="Logout" className="p-2 bg-slate-100 text-red-600 rounded-full hover:bg-red-100 shrink-0"><LogOut size={18}/></button>
+          {isSidebarOpen && (
+            <div className="whitespace-nowrap overflow-hidden">
+              <p className="text-xs font-semibold text-green-500">Online</p>
+              <p className="text-sm font-bold text-slate-700">Admin Mode</p>
+            </div>
+          )}
         </div>
       </div>
 
@@ -885,6 +915,15 @@ function AdminPOSView({ menus, orders, members, promos, savedBills, onLogout, sh
             <div className="flex-[2] flex flex-col h-full border-r border-slate-200">
               <div className="p-4 bg-white z-10 flex flex-col gap-4 shadow-sm">
                 <div className="relative"><Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={20} /><input type="text" placeholder="Cari nama menu..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full pl-12 pr-4 py-3 bg-slate-100 rounded-xl focus:bg-white focus:ring-2 focus:ring-[#3c5b41]/20 outline-none" /></div>
+                
+                {/* BARIS FILTER KATEGORI KASIR */}
+                <div className="flex gap-2 overflow-x-auto pb-1 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+                  {kasirCategories.map(cat => (
+                    <button key={cat} onClick={() => setSelectedCategory(cat)} className={`px-4 py-1.5 rounded-full font-bold text-sm whitespace-nowrap transition-colors ${selectedCategory === cat ? 'bg-[#3c5b41] text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>
+                      {cat}
+                    </button>
+                  ))}
+                </div>
               </div>
               <div className="flex-1 overflow-y-auto p-4 grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 content-start">
                 {filteredMenu.map(item => (
@@ -1181,7 +1220,7 @@ function AdminMenuManager({ menus, db, formatRp, showToast }) {
     e.preventDefault();
     if(form.variants.length === 0) return showToast("Minimal 1 varian!", "error");
     try {
-      const data = { ...form, price: Number(form.price), orderPriority: Number(form.orderPriority)||99 };
+      const data = { ...form, category: form.category || 'Lainnya', price: Number(form.price), orderPriority: Number(form.orderPriority)||99 };
       if(form.dbId) await updateDoc(getDocRef('menu', form.dbId), data);
       else await addDoc(getColRef('menu'), data);
       setForm(null); showToast("Menu disimpan");
@@ -1194,6 +1233,7 @@ function AdminMenuManager({ menus, db, formatRp, showToast }) {
       <form onSubmit={handleSave} className="max-w-2xl space-y-4">
         <div className="flex gap-4 items-center"><input type="checkbox" checked={form.isActive!==false} onChange={e=>setForm({...form, isActive: e.target.checked})} className="w-5 h-5 accent-[#3c5b41]"/><label className="font-bold">Tampilkan di Kasir/App</label></div>
         <div><label className="font-bold text-sm">Nama</label><input required value={form.name} onChange={e=>setForm({...form, name: e.target.value})} className="w-full p-3 border rounded-xl" /></div>
+        <div><label className="font-bold text-sm">Kategori</label><input required value={form.category || ''} onChange={e=>setForm({...form, category: e.target.value})} placeholder="Cth: Kopi, Roti, Non-Kopi" className="w-full p-3 border rounded-xl" /></div>
         <div><label className="font-bold text-sm">Deskripsi Singkat</label><textarea value={form.desc || ''} onChange={e=>setForm({...form, desc: e.target.value})} placeholder="Jelaskan komposisi..." className="w-full p-3 border rounded-xl resize-none outline-none focus:border-slate-400" rows="2" /></div>
         <div className="flex gap-4"><div className="flex-1"><label className="font-bold text-sm">Harga (Rp)</label><input type="number" required value={form.price} onChange={e=>setForm({...form, price: e.target.value})} className="w-full p-3 border rounded-xl" /></div><div className="w-24"><label className="font-bold text-sm">Urutan</label><input type="number" value={form.orderPriority||99} onChange={e=>setForm({...form, orderPriority: e.target.value})} className="w-full p-3 border rounded-xl text-center" /></div></div>
         <div><label className="font-bold text-sm">URL Gambar</label><input required type="url" value={form.image} onChange={e=>setForm({...form, image: e.target.value})} className="w-full p-3 border rounded-xl" /></div>
@@ -1206,11 +1246,11 @@ function AdminMenuManager({ menus, db, formatRp, showToast }) {
   );
 
   return (
-    <div className="flex-1 p-6 overflow-y-auto bg-slate-50"><div className="flex justify-between items-center mb-6"><h2 className="text-2xl font-bold">Manajemen Menu</h2><button onClick={()=>setForm({name:'Kopi Susu Gula Aren', desc:'Espresso, Susu Segar, Gula Aren', price:'18000', image:'https://images.unsplash.com/photo-1593443320739-77f74939d0da?ixlib=rb-4.0.3&auto=format&fit=crop&w=500&q=60', isActive:true, orderPriority:1, variants:[{name:'Dingin',qty:50}, {name:'Panas',qty:50}]})} className="bg-slate-900 text-white px-4 py-2 rounded-xl font-bold flex items-center gap-2"><Plus size={18}/> Tambah</button></div>
+    <div className="flex-1 p-6 overflow-y-auto bg-slate-50"><div className="flex justify-between items-center mb-6"><h2 className="text-2xl font-bold">Manajemen Menu</h2><button onClick={()=>setForm({name:'Kopi Susu Gula Aren', category: 'Kopi', desc:'Espresso, Susu Segar, Gula Aren', price:'18000', image:'https://images.unsplash.com/photo-1593443320739-77f74939d0da?ixlib=rb-4.0.3&auto=format&fit=crop&w=500&q=60', isActive:true, orderPriority:1, variants:[{name:'Dingin',qty:50}, {name:'Panas',qty:50}]})} className="bg-slate-900 text-white px-4 py-2 rounded-xl font-bold flex items-center gap-2"><Plus size={18}/> Tambah</button></div>
       <div className="space-y-3">
         {menus.map(menu => (
           <div key={menu.dbId} className={`bg-white p-4 rounded-2xl flex justify-between items-center ${menu.isActive===false?'opacity-50 grayscale':''}`}>
-            <div className="flex gap-4 items-center"><img src={menu.image} className="w-16 h-16 rounded-xl object-cover" /><div><h3 className="font-bold">{menu.name} {menu.isActive === false && <span className="bg-slate-200 text-slate-600 text-[10px] px-1.5 py-0.5 rounded uppercase tracking-wider ml-2">Hidden</span>}</h3><p className="text-[#3c5b41] text-sm font-bold">{formatRp(menu.price)}</p></div></div>
+            <div className="flex gap-4 items-center"><img src={menu.image} className="w-16 h-16 rounded-xl object-cover" /><div><h3 className="font-bold">{menu.name} {menu.isActive === false && <span className="bg-slate-200 text-slate-600 text-[10px] px-1.5 py-0.5 rounded uppercase tracking-wider ml-2">Hidden</span>}</h3><div className="flex items-center gap-2 mt-1"><p className="text-[#3c5b41] text-sm font-bold">{formatRp(menu.price)}</p><span className="bg-slate-100 text-slate-500 text-[10px] px-2 py-0.5 rounded-full font-semibold">{menu.category || 'Lainnya'}</span></div></div></div>
             <div className="flex gap-2">
               <button onClick={() => handleToggleVisibility(menu.dbId, menu.isActive !== false)} className={`p-2 rounded-lg ${menu.isActive !== false ? 'bg-green-50 text-green-600' : 'bg-slate-100 text-slate-500'}`}>
                 {menu.isActive !== false ? <Eye size={18} /> : <EyeOff size={18} />}
