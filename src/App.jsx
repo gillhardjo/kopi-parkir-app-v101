@@ -936,10 +936,10 @@ function AdminPOSView({ menus, orders, members, promos, savedBills, onLogout, sh
 
   return (
     <div className="flex h-screen bg-slate-100 font-sans text-slate-800 overflow-hidden w-full">
-      {/* Audio Element Tersembunyi (Menggunakan Link Raw Github yang benar) */}
+      {/* Audio Element Tersembunyi (Format MP3 yang paling stabil & kompatibel) */}
       <audio 
         ref={audioRef} 
-        src="https://raw.githubusercontent.com/gillhardjo/kopi-parkir-app-v101/main/assets/kopi-parkir-notif-sound-01.ogg" 
+        src="https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3" 
         loop 
         preload="auto"
       />
