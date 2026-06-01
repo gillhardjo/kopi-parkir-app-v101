@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { 
   ShoppingCart, MessageCircle, ChevronLeft, Plus, Minus, X, Download, Clock, Store, 
-  User, Phone, Users, ScrollText, Edit2, Save, Trash2, LogOut, Eye, EyeOff, Tag, Search, Filter, CheckCircle, Coffee, FolderOpen, Database, Banknote, QrCode, Image as ImageIcon, UtensilsCrossed, Printer, MapPin, Menu
+  User, Phone, Users, ScrollText, Edit2, Save, Trash2, LogOut, Eye, EyeOff, Tag, Search, Filter, CheckCircle, Coffee, FolderOpen, Database, Banknote, QrCode, Image as ImageIcon, UtensilsCrossed, Printer, Menu
 } from 'lucide-react';
 
 // --- FIREBASE IMPORTS ---
@@ -43,10 +43,9 @@ const getDocRef = (colName, docId) => {
 // ==========================================
 // CONSTANTS & UTILS
 // ==========================================
-const ADMIN_CREDENTIALS = { username: 'admin', phone: '1234' };
+const ADMIN_CREDENTIALS = { username: 'admin', phone: '1234', securityPin: '1701' }; 
 const ADMIN_WA_NUMBER = "6281285557779"; 
 const qrisImageUrl = "https://github.com/gillhardjo/tabetai-app/blob/main/public/qris.png?raw=true";
-// Logo Kopi Parkir
 const logoImageUrl = "https://github.com/gillhardjo/kopi-parkir-app-v101/blob/main/assets/logo-kopi-parkir-300.png?raw=true";
 
 const formatRp = (angka) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(angka || 0);
@@ -55,7 +54,7 @@ const generateInvoiceWAUrl = (order, userPhone) => {
   const itemsText = order.items.map(i => `- ${i.quantity || i.qty}x ${i.name} (${i.variant || i.variantId})${i.note ? ` [Note: ${i.note}]` : ''}: ${formatRp(i.price * (i.quantity || i.qty))}`).join('%0A');
   let discountText = '';
   if (order.discount && order.discount.value > 0) discountText = `%0A*Diskon Promo (${order.discount.code}):* -${formatRp(order.discount.value)}`;
-  const text = `*INVOICE KOPI PARKIR*%0A%0AOrder ID: ${order.id}%0ATanggal: ${order.date || order.time}%0ANama: ${order.customer}%0AMeja: ${order.tableNumber || 'Kasir/Takeaway'}%0A%0A*Detail Pesanan:*%0A${itemsText}%0A%0A*Subtotal:* ${formatRp(order.originalTotal || order.total + (order.discount?.value || 0))}${discountText}%0A*TOTAL TAGIHAN:* ${formatRp(order.total)}%0A%0A*Poin Didapat:* +${order.earnedPoints || 0} Poin%0A%0ATerima kasih telah ngopi di Kopi Parkir!`;
+  const text = `*INVOICE KOPI PARKIR*%0A%0AOrder ID: ${order.id}%0ATanggal: ${order.date || order.time}%0ANama: ${order.customer}%0A%0A*Detail Pesanan:*%0A${itemsText}%0A%0A*Subtotal:* ${formatRp(order.originalTotal || order.total + (order.discount?.value || 0))}${discountText}%0A*TOTAL TAGIHAN:* ${formatRp(order.total)}%0A%0A*Poin Didapat:* +${order.earnedPoints || 0} Poin%0A%0ATerima kasih telah ngopi di Kopi Parkir!`;
   
   let waNumber = userPhone || "";
   waNumber = waNumber.replace(/[^\d+]/g, ''); 
@@ -238,14 +237,15 @@ function MemberAppView({ user, menus, orders, promos, onLogout, showToast }) {
   const [view, setView] = useState('home'); 
   const [cart, setCart] = useState([]);
   const [selectedItem, setSelectedItem] = useState(null);
-  const [selectedCategory, setSelectedCategory] = useState('Semua'); // State untuk filter kategori
+  const [selectedCategory, setSelectedCategory] = useState('Semua');
 
   const getCartTotal = () => cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
   const getCartCount = () => cart.reduce((sum, item) => sum + item.quantity, 0);
 
   const addToCart = (item, variantName, quantity, note) => {
     setCart(prev => {
-      const existing = prev.findIndex(i => i.id === item.id && i.variant === variantName && i.note === note);
+      // BUG FIX: Gunakan dbId karena firebase menggunakan reference id (dbId)
+      const existing = prev.findIndex(i => i.dbId === item.dbId && i.variant === variantName && i.note === note);
       if (existing > -1) {
         const newCart = [...prev];
         newCart[existing].quantity += quantity;
@@ -257,7 +257,7 @@ function MemberAppView({ user, menus, orders, promos, onLogout, showToast }) {
     showToast("Berhasil ditambah ke keranjang");
   };
 
-  const placeOrder = async (finalTotal, discountObj, tableNumber) => {
+  const placeOrder = async (finalTotal, discountObj) => {
     const earnedPoints = Math.floor(finalTotal * 0.1); 
     
     // Auto Generate Sequential APP-ID
@@ -278,7 +278,6 @@ function MemberAppView({ user, menus, orders, promos, onLogout, showToast }) {
       id: orderId,
       customer: user.name,
       customerPhone: user.phone,
-      tableNumber: tableNumber, // Menyimpan Nomor Meja
       items: [...cart],
       total: finalTotal,
       originalTotal: getCartTotal(),
@@ -301,6 +300,15 @@ function MemberAppView({ user, menus, orders, promos, onLogout, showToast }) {
       showToast("Pesanan berhasil dibuat!", "success");
     } catch (e) {
       showToast("Gagal memproses pesanan.", "error");
+    }
+  };
+
+  const handleCancelOrder = async (orderId) => {
+    try {
+      await updateDoc(getDocRef('transactions', orderId), { status: 'Dibatalkan' });
+      showToast("Pesanan berhasil dibatalkan", "info");
+    } catch (e) {
+      showToast("Gagal membatalkan pesanan", "error");
     }
   };
 
@@ -348,7 +356,6 @@ function MemberAppView({ user, menus, orders, promos, onLogout, showToast }) {
         </div>
       )}
 
-      {}
       {view === 'menu' && (
         <div className="flex-1 flex flex-col bg-white">
           <div className="flex items-center p-4 bg-white sticky top-0 z-20 shadow-sm border-b border-slate-50">
@@ -401,7 +408,7 @@ function MemberAppView({ user, menus, orders, promos, onLogout, showToast }) {
       )}
 
       {view === 'status' && (
-        <MemberStatus orders={myOrders} onBack={() => setView('home')} userPhone={user.phone} formatRp={formatRp} />
+        <MemberStatus orders={myOrders} onBack={() => setView('home')} userPhone={user.phone} formatRp={formatRp} onCancelOrder={handleCancelOrder} />
       )}
 
       {selectedItem && (
@@ -414,7 +421,6 @@ function MemberAppView({ user, menus, orders, promos, onLogout, showToast }) {
 function MemberCheckout({ cart, onBack, updateQty, subtotal, onPay, promos, formatRp, showToast }) {
   const [promoCode, setPromoCode] = useState('');
   const [appliedPromo, setAppliedPromo] = useState(null);
-  const [tableNumber, setTableNumber] = useState(''); // Fitur Meja
 
   const applyPromo = () => {
     const valid = promos.find(p => p.code === promoCode.toUpperCase() && p.isActive !== false);
@@ -423,10 +429,7 @@ function MemberCheckout({ cart, onBack, updateQty, subtotal, onPay, promos, form
   };
 
   const handleLanjutPembayaran = () => {
-    if (!tableNumber.trim()) {
-      return showToast('Nomor Meja wajib diisi untuk pesanan Dine-in!', 'error');
-    }
-    onPay(finalTotal, appliedPromo ? { code: appliedPromo.code, value: discountAmount } : null, tableNumber);
+    onPay(finalTotal, appliedPromo ? { code: appliedPromo.code, value: discountAmount } : null);
   }
 
   const discountAmount = appliedPromo ? (appliedPromo.type === 'percent' ? Math.floor(subtotal * (appliedPromo.value / 100)) : appliedPromo.value) : 0;
@@ -461,13 +464,6 @@ function MemberCheckout({ cart, onBack, updateQty, subtotal, onPay, promos, form
           </div>
         </div>
 
-        {/* INPUT NOMOR MEJA */}
-        <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-4 mb-6">
-          <h2 className="font-bold text-slate-800 text-sm mb-3 flex items-center gap-2"><MapPin size={18} className="text-[#3c5b41]"/> Nomor Meja (Dine-in)</h2>
-          <input type="text" value={tableNumber} onChange={(e) => setTableNumber(e.target.value)} placeholder="Contoh: Meja 4 / Teras Depan" className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-[#3c5b41] focus:ring-2 focus:ring-[#3c5b41]/20 outline-none text-sm font-semibold" />
-          <p className="text-xs text-slate-500 mt-2 italic">*Wajib diisi agar kasir bisa langsung mengantar pesanan Anda.</p>
-        </div>
-
         <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-4 mb-6">
           <h2 className="font-bold text-slate-800 text-sm mb-3">Kode Promo / Voucher</h2>
           <div className="flex gap-2">
@@ -493,7 +489,7 @@ function MemberCheckout({ cart, onBack, updateQty, subtotal, onPay, promos, form
 function MemberPayment({ onCheckStatus, order, userPhone, formatRp }) {
   const handleConfirmWA = () => {
     let waNumber = ADMIN_WA_NUMBER.replace(/[^\d+]/g, ''); 
-    const text = `Halo Admin Kopi Parkir, saya ${order.customer} (Meja: ${order.tableNumber}) sudah melakukan pembayaran via QRIS untuk Order ID: ${order.id} sebesar *${formatRp(order.total)}*. Mohon dicek ya!`;
+    const text = `Halo Admin Kopi Parkir, saya ${order.customer} sudah melakukan pembayaran via QRIS untuk Order ID: ${order.id} sebesar *${formatRp(order.total)}*. Mohon dicek ya!`;
     window.open(`https://wa.me/${waNumber}?text=${encodeURIComponent(text)}`, '_blank');
   };
 
@@ -516,27 +512,31 @@ function MemberPayment({ onCheckStatus, order, userPhone, formatRp }) {
   );
 }
 
-function MemberStatus({ orders, onBack, userPhone, formatRp }) {
+function MemberStatus({ orders, onBack, userPhone, formatRp, onCancelOrder }) {
   return (
     <div className="flex-1 flex flex-col bg-slate-50 relative pb-24">
       <div className="flex items-center p-4 bg-white sticky top-0 z-20 shadow-sm border-b border-slate-100"><button onClick={onBack} className="p-2"><ChevronLeft size={24} /></button><h1 className="flex-1 text-center font-bold text-lg pr-10">Riwayat Pesanan</h1></div>
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
         {orders.map((order) => (
           <div key={order.dbId} className="bg-white rounded-2xl shadow-sm border border-slate-100 p-5 relative overflow-hidden">
-            <div className={`absolute top-0 left-0 w-1.5 h-full ${order.status === 'Selesai' ? 'bg-green-500' : order.status === 'Diproses' ? 'bg-blue-500' : 'bg-orange-500'}`} />
+            <div className={`absolute top-0 left-0 w-1.5 h-full ${order.status === 'Selesai' ? 'bg-green-500' : order.status === 'Diproses' ? 'bg-blue-500' : order.status === 'Dibatalkan' ? 'bg-red-500' : 'bg-orange-500'}`} />
             <div className="flex justify-between items-start mb-3">
               <div>
                 <p className="text-xs text-slate-500 mb-0.5">{order.time} {order.date && `• ${order.date.split(',')[0]}`}</p>
                 <p className="font-bold text-slate-800 text-sm">ID: {order.id}</p>
-                <p className="text-xs font-semibold text-[#3c5b41] mt-1 bg-[#eef2ef] inline-block px-2 py-0.5 rounded">Meja: {order.tableNumber || '-'}</p>
               </div>
-              <span className={`text-xs font-bold px-3 py-1 rounded-full ${order.status === 'Selesai' ? 'bg-green-100 text-green-700' : order.status === 'Diproses' ? 'bg-blue-100 text-blue-700' : 'bg-orange-100 text-orange-700'}`}>{order.status}</span>
+              <span className={`text-xs font-bold px-3 py-1 rounded-full ${order.status === 'Selesai' ? 'bg-green-100 text-green-700' : order.status === 'Diproses' ? 'bg-blue-100 text-blue-700' : order.status === 'Dibatalkan' ? 'bg-red-100 text-red-700' : 'bg-orange-100 text-orange-700'}`}>{order.status}</span>
             </div>
             <div className="border-t border-b border-slate-50 py-3 my-3 text-sm text-slate-600 space-y-1">
               {order.items.map((item, i) => <div key={i}><span className="font-semibold text-slate-800">{(item.quantity || item.qty)}x {item.name}</span></div>)}
             </div>
             <div className="flex justify-between items-center mb-4"><span className="text-sm text-slate-500">Total</span><span className="font-bold text-slate-800">{formatRp(order.total)}</span></div>
-            <button onClick={() => window.open(generateInvoiceWAUrl(order, userPhone), '_blank')} className="w-full flex justify-center gap-2 text-[#3c5b41] font-semibold border border-[#3c5b41]/20 bg-[#eef2ef] py-2 rounded-lg text-sm"><Download size={14} /> Invoice WA</button>
+            <div className="flex gap-2">
+              <button onClick={() => window.open(generateInvoiceWAUrl(order, userPhone), '_blank')} className="flex-1 flex justify-center gap-2 text-[#3c5b41] font-semibold border border-[#3c5b41]/20 bg-[#eef2ef] py-2 rounded-lg text-sm"><Download size={14} /> Invoice WA</button>
+              {order.status === 'Menunggu Pembayaran' && (
+                <button onClick={() => { if(window.confirm('Yakin ingin membatalkan pesanan ini?')) onCancelOrder(order.dbId); }} className="flex-1 flex justify-center items-center gap-2 text-red-600 font-semibold border border-red-200 bg-red-50 py-2 rounded-lg text-sm"><X size={14} /> Batal</button>
+              )}
+            </div>
           </div>
         ))}
       </div>
@@ -614,13 +614,23 @@ function AdminPOSView({ menus, orders, members, promos, savedBills, onLogout, sh
   const [checkoutModal, setCheckoutModal] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState(''); 
   const [cashAmount, setCashAmount] = useState('');
-  const [kasirTable, setKasirTable] = useState(''); // Fitur input Meja oleh Kasir
   const [variantModal, setVariantModal] = useState(false);
   const [showSaveBillModal, setShowSaveBillModal] = useState(false);
   const [billName, setBillName] = useState("");
 
   const pendingCount = orders.filter(o => o.status === 'Menunggu Pembayaran' || o.status === 'Pending').length;
   
+  // FITUR NOTIFIKASI SUARA PESANAN BARU
+  const [prevPending, setPrevPending] = useState(pendingCount);
+  useEffect(() => {
+    if (pendingCount > prevPending) {
+      // Bunyikan bel saat ada pesanan masuk
+      const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
+      audio.play().catch(e => console.log('Autoplay audio diblokir sementara oleh browser', e));
+    }
+    setPrevPending(pendingCount);
+  }, [pendingCount, prevPending]);
+
   const kasirCategories = ['Semua', ...Array.from(new Set(menus.filter(m => m.isActive !== false).map(m => m.category || 'Lainnya')))];
 
   const filteredMenu = menus.filter(item => {
@@ -677,7 +687,6 @@ function AdminPOSView({ menus, orders, members, promos, savedBills, onLogout, sh
 
     const newTrx = {
       id, customer: 'Walk-in / Cashier', items: [...cart], 
-      tableNumber: kasirTable || 'Takeaway',
       total: calculateTotal(),
       originalTotal: calculateSubtotal(),
       discount: appliedPromo ? { code: appliedPromo.code, value: discount } : null,
@@ -701,7 +710,7 @@ function AdminPOSView({ menus, orders, members, promos, savedBills, onLogout, sh
         }
       }
 
-      setCart([]); setPromoCode(""); setDiscount(0); setAppliedPromo(null); setPaymentMethod(''); setCashAmount(''); setKasirTable(''); setCheckoutModal(false);
+      setCart([]); setPromoCode(""); setDiscount(0); setAppliedPromo(null); setPaymentMethod(''); setCashAmount(''); setCheckoutModal(false);
       showToast("Pembayaran Berhasil! Struk siap dicetak.", "success");
     } catch (e) { showToast("Gagal memproses pembayaran", "error"); }
   };
@@ -771,7 +780,7 @@ function AdminPOSView({ menus, orders, members, promos, savedBills, onLogout, sh
         const d = new Date(order.timestamp);
         const DD = String(d.getDate()).padStart(2, '0');
         const MM = String(d.getMonth() + 1).padStart(2, '0');
-        const YY = String(d.getFullYear()).slice(-2); // Ambil 2 digit terakhir tahun
+        const YY = String(d.getFullYear()).slice(-2); 
         const HH = String(d.getHours()).padStart(2, '0');
         const MIN = String(d.getMinutes()).padStart(2, '0');
         formattedDateTime = `${DD}/${MM}/${YY} ${HH}:${MIN}`;
@@ -790,7 +799,6 @@ function AdminPOSView({ menus, orders, members, promos, savedBills, onLogout, sh
       let receiptText = init + center + boldOn + 'KOPI PARKIR\n' + boldOff;
       receiptText += 'Kopi, Roti & Kue\n\n';
       receiptText += left + `Order: ${order.customer}\n`;
-      receiptText += `Meja : ${order.tableNumber || '-'}\n`;
       receiptText += `No. Resi: ${order.id}\n`;
       receiptText += `Waktu: ${formattedDateTime}\n`;
       receiptText += lineStr;
@@ -979,17 +987,10 @@ function AdminPOSView({ menus, orders, members, promos, savedBills, onLogout, sh
 
         {/* MODALS KASIR */}
         {checkoutModal && (
-          <div className="fixed inset-0 bg-slate-900/60 flex justify-center items-center z-50 p-4">
+          <div className="fixed inset-0 bg-slate-900/60 flex justify-center items-center z-[90] p-4">
             <div className="bg-white rounded-3xl w-full max-w-md overflow-hidden">
               <div className="p-5 border-b border-slate-100 flex justify-between bg-slate-50"><h3 className="font-black text-xl">Pembayaran</h3><button onClick={()=>setCheckoutModal(false)}><X size={20}/></button></div>
               <div className="p-6 text-center"><p className="text-sm text-slate-500 mb-1">Total</p><p className="text-4xl font-black text-[#3c5b41] mb-6">{formatRp(calculateTotal())}</p>
-                
-                {/* Input Meja Untuk Pesanan Walk-in */}
-                <div className="mb-6 text-left">
-                  <label className="block text-sm font-bold text-slate-700 mb-2">Nomor Meja (Opsional)</label>
-                  <input type="text" value={kasirTable} onChange={e => setKasirTable(e.target.value)} placeholder="Biarkan kosong jika Takeaway" className="w-full p-3 bg-slate-50 border-2 rounded-xl outline-none focus:border-[#3c5b41]" />
-                </div>
-
                 <div className="grid grid-cols-2 gap-3 mb-6">
                   <button onClick={() => setPaymentMethod('Cash')} className={`py-4 rounded-2xl font-bold border-2 flex flex-col items-center gap-2 ${paymentMethod==='Cash'?'border-[#3c5b41] bg-[#f0f4f1] text-[#3c5b41]':'border-slate-200 text-slate-500'}`}><Banknote size={28} /> Tunai</button>
                   <button onClick={() => setPaymentMethod('QRIS')} className={`py-4 rounded-2xl font-bold border-2 flex flex-col items-center gap-2 ${paymentMethod==='QRIS'?'border-[#3c5b41] bg-[#f0f4f1] text-[#3c5b41]':'border-slate-200 text-slate-500'}`}><QrCode size={28} /> QRIS</button>
@@ -1004,8 +1005,8 @@ function AdminPOSView({ menus, orders, members, promos, savedBills, onLogout, sh
         )}
 
         {showSaveBillModal && (
-          <div className="fixed inset-0 bg-slate-900/50 flex justify-center items-center z-50 p-4">
-            <div className="bg-white p-6 rounded-3xl w-full max-w-sm"><h3 className="text-xl font-bold mb-4">Simpan Tagihan</h3><input autoFocus type="text" placeholder="Meja 4 / Nama" value={billName} onChange={e=>setBillName(e.target.value)} className="w-full p-3 rounded-xl border mb-4" /><div className="flex gap-2"><button onClick={()=>setShowSaveBillModal(false)} className="flex-1 py-3 bg-slate-100 rounded-xl font-bold">Batal</button><button onClick={handleSaveBill} className="flex-1 py-3 bg-[#3c5b41] text-white rounded-xl font-bold">Simpan</button></div></div>
+          <div className="fixed inset-0 bg-slate-900/50 flex justify-center items-center z-[90] p-4">
+            <div className="bg-white p-6 rounded-3xl w-full max-w-sm"><h3 className="text-xl font-bold mb-4">Simpan Tagihan</h3><input autoFocus type="text" placeholder="Nama / Meja" value={billName} onChange={e=>setBillName(e.target.value)} className="w-full p-3 rounded-xl border mb-4" /><div className="flex gap-2"><button onClick={()=>setShowSaveBillModal(false)} className="flex-1 py-3 bg-slate-100 rounded-xl font-bold">Batal</button><button onClick={handleSaveBill} className="flex-1 py-3 bg-[#3c5b41] text-white rounded-xl font-bold">Simpan</button></div></div>
           </div>
         )}
 
@@ -1027,6 +1028,10 @@ function AdminOrderManager({ orders, members, menus, db, formatRp, showToast, on
   const [sortOrder, setSortOrder] = useState("Terbaru");
   
   const [expandedOrders, setExpandedOrders] = useState({});
+  
+  // PIN MODAL STATE
+  const [pinModal, setPinModal] = useState({ show: false, orderId: null });
+  const [pinInput, setPinInput] = useState("");
 
   const toggleOrderDetails = (orderId) => {
     setExpandedOrders(prev => ({ ...prev, [orderId]: !prev[orderId] }));
@@ -1065,7 +1070,7 @@ function AdminOrderManager({ orders, members, menus, db, formatRp, showToast, on
   const filteredOrders = useMemo(() => {
     let result = orders.filter(o => {
       const query = searchQuery.toLowerCase();
-      const matchSearch = (o.customer && o.customer.toLowerCase().includes(query)) || (o.id && o.id.toLowerCase().includes(query)) || (o.tableNumber && o.tableNumber.toLowerCase().includes(query));
+      const matchSearch = (o.customer && o.customer.toLowerCase().includes(query)) || (o.id && o.id.toLowerCase().includes(query));
       
       const matchStatus = filterStatus === 'Semua' || o.status === filterStatus;
 
@@ -1093,13 +1098,13 @@ function AdminOrderManager({ orders, members, menus, db, formatRp, showToast, on
   }, [orders, searchQuery, filterDate, filterStatus, sortOrder]);
 
   return (
-    <div className="flex-1 flex flex-col overflow-hidden bg-slate-50">
+    <div className="flex-1 flex flex-col overflow-hidden bg-slate-50 relative">
       <div className="bg-white p-6 border-b border-slate-200 shadow-sm z-10 sticky top-0">
         <h2 className="text-2xl font-bold mb-4">Manajemen Pesanan</h2>
         <div className="flex flex-col md:flex-row gap-3">
           <div className="relative flex-1">
             <Search size={18} className="absolute left-3 top-3 text-slate-400" />
-            <input type="text" placeholder="Cari Nama / No Meja..." value={searchQuery} onChange={e=>setSearchQuery(e.target.value)} className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:border-slate-400" />
+            <input type="text" placeholder="Cari Nama / No Pesanan..." value={searchQuery} onChange={e=>setSearchQuery(e.target.value)} className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:border-slate-400" />
           </div>
           <div className="flex flex-wrap gap-3">
             <input type="date" value={filterDate} onChange={e=>setFilterDate(e.target.value)} className="px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:border-slate-400" />
@@ -1128,7 +1133,7 @@ function AdminOrderManager({ orders, members, menus, db, formatRp, showToast, on
                 <div className="flex flex-col md:flex-row justify-between md:items-center gap-4">
                   <div>
                     <p className="font-bold text-lg">{order.id} <span className="text-slate-400 text-sm ml-2">{order.time} {order.date && `• ${order.date.split(',')[0]}`}</span></p>
-                    <p className="text-sm font-semibold text-[#3c5b41]">{order.customer} <span className="bg-[#eef2ef] text-[#2d4431] px-2 py-0.5 rounded ml-2">Meja: {order.tableNumber || '-'}</span></p>
+                    <p className="text-sm font-semibold text-[#3c5b41]">{order.customer}</p>
                   </div>
                   <div className="flex flex-wrap items-center gap-2 md:gap-3">
                     <button onClick={() => toggleOrderDetails(order.dbId)} className="p-2 bg-blue-50 text-blue-600 hover:bg-blue-100 rounded-lg flex items-center gap-2 text-sm font-bold shadow-sm transition-colors">
@@ -1141,7 +1146,7 @@ function AdminOrderManager({ orders, members, menus, db, formatRp, showToast, on
                     <select value={order.status} onChange={(e) => handleStatusChange(order.dbId, e.target.value)} className="p-2 border rounded-xl bg-slate-50 font-bold text-sm">
                       {STATUS_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
                     </select>
-                    <button onClick={()=>deleteDoc(getDocRef('transactions', order.dbId))} className="p-2 text-red-500 hover:bg-red-50 rounded-lg"><Trash2 size={20}/></button>
+                    <button onClick={() => setPinModal({show: true, orderId: order.dbId})} className="p-2 text-red-500 hover:bg-red-50 rounded-lg"><Trash2 size={20}/></button>
                   </div>
                 </div>
 
@@ -1185,6 +1190,31 @@ function AdminOrderManager({ orders, members, menus, db, formatRp, showToast, on
           )}
         </div>
       </div>
+
+      {/* MODAL PIN HAPUS PESANAN */}
+      {pinModal.show && (
+        <div className="fixed inset-0 bg-slate-900/60 flex justify-center items-center z-[100] p-4 backdrop-blur-sm">
+          <div className="bg-white rounded-3xl w-full max-w-xs p-6 text-center shadow-xl animate-in zoom-in-95">
+            <h3 className="font-bold text-xl mb-2 text-slate-800">Hapus Pesanan</h3>
+            <p className="text-sm text-slate-500 mb-4">Masukkan PIN 4 digit untuk otorisasi penghapusan.</p>
+            <input type="password" maxLength={4} autoFocus value={pinInput} onChange={e=>setPinInput(e.target.value)} className="w-full text-center text-3xl tracking-[0.5em] p-4 border-2 border-slate-200 rounded-xl focus:border-red-500 outline-none mb-6" placeholder="••••" />
+            <div className="flex gap-2">
+              <button onClick={()=>{setPinModal({show:false, orderId:null}); setPinInput("");}} className="flex-1 py-3 bg-slate-100 text-slate-700 font-bold rounded-xl hover:bg-slate-200">Batal</button>
+              <button onClick={()=>{
+                if(pinInput === ADMIN_CREDENTIALS.securityPin) { 
+                  deleteDoc(getDocRef('transactions', pinModal.orderId));
+                  setPinModal({show:false, orderId:null});
+                  setPinInput("");
+                  showToast("Pesanan berhasil dihapus", "success");
+                } else {
+                  showToast("PIN Keamanan Salah!", "error");
+                  setPinInput("");
+                }
+              }} className="flex-1 py-3 bg-red-600 text-white font-bold rounded-xl hover:bg-red-700">Hapus</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
